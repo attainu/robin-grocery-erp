@@ -1,14 +1,22 @@
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+const createError = require('http-errors');
+const express = require('express');
+const path = require('path');
+const cookieParser = require('cookie-parser');
+const logger = require('morgan');
+const passport = require('passport');
+const flash = require('connect-flash');
+const mongoose = require('mongoose');
+const session = require('express-session');
+const MongoStore = require('connect-mongo')(session);
 
-var sellerRouter = require('./routes/sellerhome');
-var usersRouter = require('./routes/users');
-var homeRouter = require('./routes/home');
+const userRouter = require('./routes/userRouter');
+const sellerRouter = require('./routes/sellerhome');
+const buyerRouter = require('./routes/buyerhome');
 
-var app = express();
+const app = express();
+
+// Passport Config
+require('./config/passport')(passport);
 
 // To connect to DB
 require('./database/database');
@@ -23,24 +31,39 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use('/', sellerRouter);
-app.use('/users', usersRouter);
-app.use('/home',homeRouter);
 
-// catch 404 and forward to error handler
+// Express session
+app.use(
+  session({
+    secret: 'secret',
+    resave: true,
+    saveUninitialized: true,
+    cookie: { maxAge: 15*60*1000 },
+    store: new MongoStore({ mongooseConnection: mongoose.connection })
+  })
+  
+);
+// Connect flash
+app.use(flash());
+
+// Passport middleware
+app.use(passport.initialize());
+
+
+// Global variables
 app.use(function(req, res, next) {
-  next(createError(404));
+  res.locals.success_msg = req.flash('success_msg');
+  res.locals.error_msg = req.flash('error_msg');
+  res.locals.error = req.flash('error');
+  
+  next();
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+app.use('/', userRouter);
+app.use('/',sellerRouter);
+app.use('/',buyerRouter);
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
-});
+app.use(passport.session());
+
 
 module.exports = app;
